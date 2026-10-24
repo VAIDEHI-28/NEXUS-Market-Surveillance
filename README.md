@@ -31,6 +31,7 @@ NEXUS follows a simple process:
 
 The following diagram shows how NEXUS collects market data, detects unusual activity, and makes alerts available through its API.
 
+![NEXUS System Architecture](assets/nexus-architecture.svg)
 ### What does each part do?
 
 | Component | Simple explanation |
