@@ -29,22 +29,7 @@ NEXUS follows a simple process:
 
 ## System architecture
 
-```mermaid
-flowchart TD
-    A["Binance Exchange"] --> B["Market Data Collection"]
-    B --> C["Order Book Builder"]
-    B --> D["Trade Data"]
-    C --> E["Market Feature Engineering"]
-    D --> E
-    E --> F["Market Anomaly Detector"]
-    F --> G["Alert Store"]
-    G --> H["FastAPI"]
-    H --> I["Dashboard or API Client"]
-
-    style A fill:#dbeafe,stroke:#2563eb,color:#111827
-    style F fill:#fef3c7,stroke:#d97706,color:#111827
-    style G fill:#dcfce7,stroke:#16a34a,color:#111827
-```
+The following diagram shows how NEXUS collects market data, detects unusual activity, and makes alerts available through its API.
 
 ### What does each part do?
 
