@@ -38,3 +38,65 @@ def test_order_book_allows_zero_quantity():
     level = OrderBookLevel(price=100.0, quantity=0)
 
     assert level.quantity == 0
+
+def test_order_book_rejects_duplicate_bid_prices():
+    with pytest.raises(ValidationError):
+        OrderBookSnapshot(
+            symbol="BTCUSDT",
+            last_update_id=12345,
+            bids=(
+                OrderBookLevel(price=100.0, quantity=2.0),
+                OrderBookLevel(price=100.0, quantity=3.0),
+            ),
+            asks=(OrderBookLevel(price=101.0, quantity=1.0),),
+        )
+
+
+def test_order_book_rejects_duplicate_ask_prices():
+    with pytest.raises(ValidationError):
+        OrderBookSnapshot(
+            symbol="BTCUSDT",
+            last_update_id=12345,
+            bids=(OrderBookLevel(price=99.0, quantity=1.0),),
+            asks=(
+                OrderBookLevel(price=101.0, quantity=1.0),
+                OrderBookLevel(price=101.0, quantity=2.0),
+            ),
+        )
+
+
+def test_order_book_rejects_unsorted_bids():
+    with pytest.raises(ValidationError):
+        OrderBookSnapshot(
+            symbol="BTCUSDT",
+            last_update_id=12345,
+            bids=(
+                OrderBookLevel(price=99.0, quantity=1.0),
+                OrderBookLevel(price=100.0, quantity=2.0),
+            ),
+            asks=(OrderBookLevel(price=101.0, quantity=1.0),),
+        )
+
+
+def test_order_book_rejects_unsorted_asks():
+    with pytest.raises(ValidationError):
+        OrderBookSnapshot(
+            symbol="BTCUSDT",
+            last_update_id=12345,
+            bids=(OrderBookLevel(price=99.0, quantity=1.0),),
+            asks=(
+                OrderBookLevel(price=102.0, quantity=1.0),
+                OrderBookLevel(price=101.0, quantity=2.0),
+            ),
+        )
+
+
+@pytest.mark.parametrize("ask_price", [99.0, 100.0])
+def test_order_book_rejects_crossed_or_locked_book(ask_price):
+    with pytest.raises(ValidationError):
+        OrderBookSnapshot(
+            symbol="BTCUSDT",
+            last_update_id=12345,
+            bids=(OrderBookLevel(price=100.0, quantity=1.0),),
+            asks=(OrderBookLevel(price=ask_price, quantity=1.0),),
+        )

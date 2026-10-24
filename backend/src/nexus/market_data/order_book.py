@@ -1,5 +1,5 @@
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class OrderBookLevel(BaseModel):
@@ -20,3 +20,33 @@ class OrderBookSnapshot(BaseModel):
     last_update_id: int = Field(ge=0)
     bids: tuple[OrderBookLevel, ...]
     asks: tuple[OrderBookLevel, ...]
+
+    @model_validator(mode="after")
+    def validate_book_structure(self):
+        """Ensure levels are unique, correctly ordered, and uncrossed."""
+        bid_prices = [level.price for level in self.bids]
+        ask_prices = [level.price for level in self.asks]
+
+        if len(bid_prices) != len(set(bid_prices)):
+            raise ValueError("Duplicate bid prices are not allowed")
+
+        if len(ask_prices) != len(set(ask_prices)):
+            raise ValueError("Duplicate ask prices are not allowed")
+
+        if any(
+            current <= following
+            for current, following in zip(bid_prices, bid_prices[1:])
+        ):
+            raise ValueError("Bids must be sorted from highest to lowest price")
+
+        if any(
+            current >= following
+            for current, following in zip(ask_prices, ask_prices[1:])
+        ):
+            raise ValueError("Asks must be sorted from lowest to highest price")
+
+        if self.bids and self.asks:
+            if self.bids[0].price >= self.asks[0].price:
+                raise ValueError("Order book must have a positive spread")
+
+        return self

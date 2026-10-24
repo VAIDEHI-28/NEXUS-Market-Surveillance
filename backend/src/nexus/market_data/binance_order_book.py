@@ -2,6 +2,7 @@
 import asyncio
 import json
 from collections import deque
+from datetime import datetime, timezone
 
 import httpx
 from websockets.asyncio.client import connect
@@ -56,14 +57,51 @@ class BinanceOrderBook:
             response.raise_for_status()
             return response.json()
 
+    @staticmethod
+    def get_event_time(event: dict) -> datetime | None:
+        """Convert Binance's event timestamp E from milliseconds to UTC."""
+        timestamp_ms = event.get("E")
+
+        if timestamp_ms is None:
+            return None
+
+        return datetime.fromtimestamp(
+            int(timestamp_ms) / 1000,
+            tz=timezone.utc,
+        )
+
+    @staticmethod
+    def get_received_at(event: dict) -> datetime | None:
+        """Retrieve the locally captured WebSocket receipt timestamp."""
+        received_at = event.get("_received_at")
+
+        if received_at is None:
+            return None
+
+        if (
+            not isinstance(received_at, datetime)
+            or received_at.tzinfo is None
+            or received_at.utcoffset() is None
+        ):
+            raise ValueError(
+                "Event receipt timestamp must be timezone-aware"
+            )
+
+        return received_at.astimezone(timezone.utc)
+
     async def receive_events(self, websocket) -> None:
         """Read WebSocket messages using exactly one reader task."""
         try:
             async for message in websocket:
+                # Capture receipt time before parsing or queueing the message.
+                received_at = datetime.now(timezone.utc)
                 event = json.loads(message)
 
                 if event.get("e") != "depthUpdate":
                     continue
+
+                # Preserve receipt time while the event waits in a queue/buffer.
+                event["_received_at"] = received_at
 
                 try:
                     self.events.put_nowait(event)
@@ -134,6 +172,9 @@ class BinanceOrderBook:
 
     def apply_buffered_event(self, event: dict) -> None:
         """Apply a depth event during initial synchronization."""
+        event_time = self.get_event_time(event)
+        received_at = self.get_received_at(event)
+
         self.builder.apply_levels(
             self.builder.bids,
             event["b"],
@@ -143,6 +184,10 @@ class BinanceOrderBook:
             event["a"],
         )
         self.builder.last_update_id = int(event["u"])
+
+        # Record timing only after the event has actually been applied.
+        self.builder.last_event_time = event_time
+        self.builder.last_received_at = received_at
 
     async def synchronize(self) -> None:
         """
@@ -264,6 +309,8 @@ class BinanceOrderBook:
                 final_update_id=int(event["u"]),
                 bids=event["b"],
                 asks=event["a"],
+                event_time=self.get_event_time(event),
+                received_at=self.get_received_at(event),
             )
 
             if not applied and not self.builder.is_valid:
@@ -314,7 +361,7 @@ class BinanceOrderBook:
                 print(f"Order-book error: {exc}")
 
             print(
-                f"Reconnecting and resynchronizing in "
+                "Reconnecting and resynchronizing in "
                 f"{RECONNECT_DELAY} seconds..."
             )
             await asyncio.sleep(RECONNECT_DELAY)
